@@ -6,21 +6,21 @@ import axios from 'axios';
 
 const App = () => {
   const awsSign = new AWSSign();
-  let credentials = {
-    SecretKey: '987890',
-    AccessKeyId: '7890',
-  };
+
   const options = {
     path: '/',
     method: 'get',
     service: 'apigateway.amazonaws.com',
     headers: {
-      'X-Amz-Date': '20150209T123600Z',
-      host: 'example.amazonaws.com',
+      'X-Amz-Date': '20230209T123600Z',
+      host: '.amazonaws.com',
     },
     region: 'us-east-1',
     body: '',
-    credentials,
+    credentials: {
+      SecretKey: '987890',
+      AccessKeyId: '7890',
+    },
   };
   awsSign.sign(options);
   const signature = awsSign.getSignature();
