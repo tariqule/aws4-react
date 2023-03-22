@@ -38,9 +38,9 @@ import { AWSSign } from 'aws4-react';
   awsSign.sign(options);
 
 
-# returns aws4 'signature'
+// returns aws4 'signature'
   const signature = awsSign.getSignature();
-# returns 'Authorization Header'
+// returns 'Authorization Header'
   const authorization = awsSign.getAuthHeader();
   const { Authorization } = authorization
 
