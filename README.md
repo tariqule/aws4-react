@@ -1,6 +1,10 @@
-# AWS4 React
+## AWS4 React
 
 AWS4 React Library is used to get AWS Signature.
+
+This library is to create a signed AWS API request in react or any js project.
+
+### Signed AWS API request
 
 ## Installation
 
@@ -20,12 +24,24 @@ import { AWSSign } from 'aws4-react';
 
   const awsSign = new AWSSign();
 
-  const options = {
+
+  awsSign.sign(options);
+
+
+// returns aws4 'signature'
+  const signature = awsSign.getSignature();
+// returns 'Authorization Header'
+  const authorization = awsSign.getAuthorization();
+  const { Authorization } = authorization
+
+const amzDate = awsSign.getAmzDate(new Date)
+
+ const options = {
     path: '/',
     method: 'get',
     service: 'apigateway.amazonaws.com',
     headers: {
-      'X-Amz-Date': '20230209T123600Z',
+      'X-Amz-Date': amzDate,
       host: '.amazonaws.com',
     },
     region: 'us-east-1',
@@ -35,18 +51,39 @@ import { AWSSign } from 'aws4-react';
       AccessKeyId: '7890',
     },
   };
-  awsSign.sign(options);
 
+awsSign.retrieveAuthorizationHeader(Authorization, signature)
 
-// returns aws4 'signature'
-  const signature = awsSign.getSignature();
-// returns 'Authorization Header'
-  const authorization = awsSign.getAuthHeader();
-  const { Authorization } = authorization
+//returns `${Authorization}SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`
 
-Pass the Authorization header as follows:
-`${Authorization}SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`
+```
 
+Now you can send the Authorization in the header as follows
+
+# Example with RTK Query
+
+```Typescript
+fetchBaseQuery({
+    baseUrl: "example.com",
+    prepareHeaders: (headers) => {
+       const authHeader = awsSign.retrieveAuthorizationHeader(Authorization, signature)
+        headers.set('Authorization', `${authHeader}`);
+      return headers;
+    },
+  });
+```
+
+# Example with Axios
+
+```Typescript
+
+  const authHeader = awsSign.retrieveAuthorizationHeader(Authorization, signature)
+  axios.post('url', {"body":data}, {
+    headers: {
+    'Authorization': 'authHeader'
+    }
+  }
+)
 ```
 
 ## Contributing

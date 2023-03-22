@@ -43,9 +43,6 @@ export class AWSSign {
    * @param {string} options.region - region of the request
    * @param {object} options.credentials - credentials of the request
    * @param {object} options.credentials - { AccessKeyId, SecretKey }
-   * ```TypeScript
-   *  const options = {
-   * ```
    */
   sign(options: {
     method: string;
@@ -71,7 +68,7 @@ export class AWSSign {
    * @method getCanonicalHeaders
    * @returns {string} canonical headers
    */
-  getCanonicalString() {
+  getCanonicalString(): string {
     let parts = [];
     // pathname = this.pathName;
     parts.push(this.method);
@@ -87,7 +84,7 @@ export class AWSSign {
    * @method getStringToSign
    * @returns {string} string to sign for AWS request
    */
-  getStringToSign() {
+  getStringToSign(): string {
     let parts = [];
     parts.push(ALGORITHM);
     parts.push(this.datetime);
@@ -110,7 +107,7 @@ export class AWSSign {
     return Util.hmac(kCredentials, this.getStringToSign(), 'hex');
   }
 
-  getAuthHeader(): { Authorization: string } {
+  getAuthorization(): { Authorization: string } {
     let header = `${ALGORITHM} Credential=${
       this.credentials.AccessKeyId
     }/${this.getCredentialString()}, SignedHeaders=${this.getSignedHeaders()}, Signature=${this.getSignature()}`;
@@ -246,5 +243,26 @@ export class AWSSign {
 
   getDate(): any {
     return (this.datetime as any).slice(0, 8);
+  }
+
+  /**
+   * @method getAmzDate
+   * @param date
+   * @returns
+   * the date in the amz date format e.g 20230209T123600Z
+   */
+  getAmzDate(date: Date): any {
+    return date.toISOString().replace(/[:\-]|\.\d{3}/g, '');
+  }
+
+  /**
+   * @method retrieveAuthorizationHeader
+   * @param authorization - the signed authorization header
+   * @param signature - the signature
+   * @returns
+   * the authorization header with the signature
+   */
+  retrieveAuthorizationHeader(authorization: string, signature: string): any {
+    return `${authorization}SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`;
   }
 }

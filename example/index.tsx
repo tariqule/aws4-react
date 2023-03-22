@@ -2,11 +2,10 @@ import 'react-app-polyfill/ie11';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import { AWSSign } from '../.';
-import axios from 'axios';
 
 const App = () => {
   const awsSign = new AWSSign();
-
+  awsSign.getAmzDate(new Date());
   const options = {
     path: '/',
     method: 'get',
@@ -24,15 +23,13 @@ const App = () => {
   };
   awsSign.sign(options);
   const signature = awsSign.getSignature();
-  const authorization = awsSign.getAuthHeader();
-
-  console.log('signature => ', signature);
-  console.log(
-    'authorization => ',
-    `${authorization.Authorization}SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`
+  const { Authorization } = awsSign.getAuthorization();
+  const AuthorizationHeader = awsSign.retrieveAuthorizationHeader(
+    Authorization,
+    signature
   );
-
-  return <div>Test</div>;
+  console.log(AuthorizationHeader);
+  return <div>{AuthorizationHeader}</div>;
 };
 
 ReactDOM.render(<App />, document.getElementById('root'));
