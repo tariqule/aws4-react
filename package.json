@@ -1,5 +1,5 @@
 {
-  "version": "0.1.3",
+  "version": "0.1.4",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -36,7 +36,19 @@
     "trailingComma": "es5"
   },
   "name": "aws4-react",
-  "author": "tariq",
+  "author": "tariqule",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tariqule/aws4-react"
+  },
+  "keywords": [
+    "react",
+    "aws",
+    "aws4",
+    "aws4-react",
+    "aws4react",
+    "aws4 react"
+  ],
   "module": "dist/aws4-react.esm.js",
   "size-limit": [
     {
