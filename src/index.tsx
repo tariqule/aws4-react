@@ -33,6 +33,7 @@ export class AWSSign {
   datetime: any;
 
   /**
+   * Function to set the options for the request which is to be signed.
    * @method sign
    * @param {object} options
    * @param {string} options.method - HTTP method
@@ -43,6 +44,25 @@ export class AWSSign {
    * @param {string} options.region - region of the request
    * @param {object} options.credentials - credentials of the request
    * @param {object} options.credentials - { AccessKeyId, SecretKey }
+   * @example
+   * ```TypeScript
+   * let awsSign = new AWSSign();
+   * awsSign.sign({
+   *  method: 'GET',
+   * path: '/?Action=ListUsers&Version=2010-05-08',
+   * service: 'iam',
+   * headers: {
+   *  'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+   * 'X-Amz-Date': '20150830T123600Z',
+   * },
+   * body: '',
+   * region: 'us-east-1',
+   * credentials: {
+   * AccessKeyId: 'AKIDEXAMPLE',
+   * SecretKet: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY',
+   * },
+   * });
+   * ```
    */
   sign(options: {
     method: string;
@@ -107,6 +127,16 @@ export class AWSSign {
     return Util.hmac(kCredentials, this.getStringToSign(), 'hex');
   }
 
+  /**
+   * Function to get the Authorization header for the request.
+   * @method getAuthorization
+   * @returns {{Authorization: string}} Authorization header
+   * @example
+   * ```TypeScript
+   * let authHeader = awsSign.getAuthorization();
+   * // authHeader returns { Authorization: "" }
+   * ```
+   */
   getAuthorization(): { Authorization: string } {
     let header = `${ALGORITHM} Credential=${
       this.credentials.AccessKeyId
@@ -250,6 +280,11 @@ export class AWSSign {
    * @param date
    * @returns
    * the date in the amz date format e.g 20230209T123600Z
+   * @example
+   * ```TypeScript
+   * let amzDate = awsSign.getAmzDate(new Date());
+   * // amzDate returns 20230209T123600Z
+   * ```
    */
   getAmzDate(date: Date): any {
     return date.toISOString().replace(/[:\-]|\.\d{3}/g, '');
@@ -261,6 +296,13 @@ export class AWSSign {
    * @param signature - the signature
    * @returns
    * the authorization header with the signature
+   * @example
+   * ```TypeScript
+   * let authorization = awsSign.getAuthorizationHeader();
+   * let signature = awsSign.getSignature();
+   * let authHeader = awsSign.retrieveAuthorizationHeader(authorization, signature);
+   * // authHeader returns Authorization Header with the signature
+   * ```
    */
   retrieveAuthorizationHeader(authorization: string, signature: string): any {
     return `${authorization}SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`;
