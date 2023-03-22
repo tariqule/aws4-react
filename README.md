@@ -4,8 +4,6 @@ AWS4 React Library is used to get AWS Signature.
 
 This library is to create a signed AWS API request in react or any js project.
 
-### Signed AWS API request
-
 ## Installation
 
 Use the package manager [npm](https://docs.npmjs.com/cli/v6/commands/npm-install) to install aws4-react.
@@ -60,7 +58,7 @@ awsSign.retrieveAuthorizationHeader(Authorization, signature)
 
 Now you can send the Authorization in the header as follows
 
-# Example with RTK Query
+## Example with RTK Query
 
 ```Typescript
 fetchBaseQuery({
@@ -73,7 +71,7 @@ fetchBaseQuery({
   });
 ```
 
-# Example with Axios
+## Example with Axios
 
 ```Typescript
 
