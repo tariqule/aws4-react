@@ -24,7 +24,7 @@ import { AWSSigner } from 'aws4-react';
     data: JSON.stringify(body),
     method: 'GET',
     url:
-      'https://z7hgc1k4qb.execute-api.us-east-1.amazonaws.com/master/batches',
+      'https://example.com',
   };
   let cred = {
     secret_key: 'kdjaskdjaksd',
