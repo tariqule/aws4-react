@@ -18,41 +18,41 @@ yarn add aws4-react
 ## Usage
 
 ```Typescript
-import { AWSSign } from 'aws4-react';
+import { AWSSigner } from 'aws4-react';
 
-  const awsSign = new AWSSign();
-
-
-  awsSign.sign(options);
-
-
-// returns aws4 'signature'
-  const signature = awsSign.getSignature();
-// returns 'Authorization Header'
-  const authorization = awsSign.getAuthorization();
-  const { Authorization } = authorization
-
-const amzDate = awsSign.getAmzDate(new Date)
-
- const options = {
-    path: '/',
-    method: 'get',
-    service: 'apigateway.amazonaws.com',
-    headers: {
-      'X-Amz-Date': amzDate,
-      host: '.amazonaws.com',
-    },
-    region: 'us-east-1',
-    body: '',
-    credentials: {
-      SecretKey: '987890',
-      AccessKeyId: '7890',
-    },
+ let params = {
+    data: JSON.stringify(body),
+    method: 'GET',
+    url:
+      'https://z7hgc1k4qb.execute-api.us-east-1.amazonaws.com/master/batches',
+  };
+  let cred = {
+    secret_key: 'kdjaskdjaksd',
+    access_key: 'dkasndkjasjdkas',
+    session_token: '',
   };
 
-awsSign.retrieveAuthorizationHeader(Authorization, signature)
+  console.log(cred);
 
-//returns `${Authorization}SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`
+  const serviceInfo = {
+    region: 'us-east-1',
+    service: 'execute-api',
+  };
+
+  const headers = AWSSigner.sign(params, cred, serviceInfo);
+
+/* It returns
+  {
+  data?: string;
+  metho?: string;
+  url?: string;
+  headers?: {
+    host?: string;
+    'x-amz-date': string;
+    Authorization: string;
+  };
+}
+ */
 
 ```
 
@@ -61,11 +61,14 @@ Now you can send the Authorization in the header as follows
 ## Example with RTK Query
 
 ```Typescript
+const signedHeaders = AWSSigner.sign(params, cred, serviceInfo);
 fetchBaseQuery({
     baseUrl: "example.com",
     prepareHeaders: (headers) => {
-       const authHeader = awsSign.retrieveAuthorizationHeader(Authorization, signature)
-        headers.set('Authorization', `${authHeader}`);
+       const authHeader = signedHeaders.headers
+        for (let key in authHeader) {
+         headers.set(key, authHeader[key]);
+      }
       return headers;
     },
   });
@@ -74,11 +77,11 @@ fetchBaseQuery({
 ## Example with Axios
 
 ```Typescript
-
-  const authHeader = awsSign.retrieveAuthorizationHeader(Authorization, signature)
+const signedHeaders = AWSSigner.sign(params, cred, serviceInfo);
+  const authHeader = signedHeaders.headers
   axios.post('url', {"body":data}, {
     headers: {
-    'Authorization': 'authHeader'
+    'Authorization': authHeader.Authorization
     }
   }
 )

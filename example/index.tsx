@@ -16,7 +16,7 @@ interface Header {
 
 const App = () => {
   let params = {
-    // data: JSON.stringify(body),
+    data: JSON.stringify(body),
     method: 'GET',
     url:
       'https://z7hgc1k4qb.execute-api.us-east-1.amazonaws.com/master/batches',

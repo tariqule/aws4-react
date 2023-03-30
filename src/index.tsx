@@ -193,7 +193,7 @@ const get_authorization_header = function(
 /**
  * Sign a HTTP request, add 'Authorization' header to request param
  */
-export class Signer {
+export class AWSSigner {
   /**
    * Sign a HTTP request, add 'Authorization' header to request param
    * @method sign
