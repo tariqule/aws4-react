@@ -1,5 +1,5 @@
 {
-  "version": "0.1.8",
+  "version": "0.2.2",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -66,7 +66,8 @@
     "size-limit": "^8.2.4",
     "tsdx": "^0.14.1",
     "tslib": "^2.5.0",
-    "typescript": "^5.0.2"
+    "typescript": "^5.0.2",
+    "url": "^0.11.0"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^4.0.0",
