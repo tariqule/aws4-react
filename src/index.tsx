@@ -1,310 +1,397 @@
-/**
- * @author: Tariqule Khan <tariqule@gmail.com>
- * @license: MIT
- * @description: This is the main entry point for the library.
- */
+import { Sha256 as jsSha256 } from '@aws-crypto/sha256-js';
+import { SourceData } from '@aws-sdk/types';
+import { toHex } from '@aws-sdk/util-hex-encoding';
+import { parse, format } from 'url';
+import { DateUtils } from './DateUtils';
 
-import {
-  ALGORITHM,
-  AMAZON_HEADERS,
-  REQUIRED_HEADERS,
-  REQUIRED_OPTIONS_KEYS,
-  UNSIGNABLE_HEADERS,
-} from './constants';
-import { Util } from './utils';
+const DEFAULT_ALGORITHM = 'AWS4-HMAC-SHA256';
+const IOT_SERVICE_NAME = 'iotdevicegateway';
 
-/**
- * @class AWSSign
- * @description
- * This class is used to generate the signature for AWS requests.
- * It is used by the AWSClient class.
- * @see AWSClient
- * @see https://docs.aws.amazon.com/general/latest/gr/sigv4_signing.html
- */
-export class AWSSign {
-  method: string | undefined;
-  pathName: string | undefined;
-  queryString: string | undefined;
-  service: any;
-  headers: any;
-  body: any;
-  region: any;
-  credentials: any;
-  datetime: any;
+const encrypt = function(key: SourceData | undefined, src: SourceData) {
+  const hash = new jsSha256(key);
+  hash.update(src);
+  return hash.digestSync();
+};
 
-  /**
-   * Function to set the options for the request which is to be signed.
-   * @method sign
-   * @param {object} options
-   * @param {string} options.method - HTTP method
-   * @param {string} options.path - path of the request
-   * @param {string} options.service - service name
-   * @param {object} options.headers - headers of the request
-   * @param {string} options.body - body of the request
-   * @param {string} options.region - region of the request
-   * @param {object} options.credentials - credentials of the request
-   * @param {object} options.credentials - { AccessKeyId, SecretKey }
-   * @example
-   * ```TypeScript
-   * let awsSign = new AWSSign();
-   * awsSign.sign({
-   *  method: 'GET',
-   * path: '/?Action=ListUsers&Version=2010-05-08',
-   * service: 'iam',
-   * headers: {
-   *  'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
-   * 'X-Amz-Date': '20150830T123600Z',
-   * },
-   * body: '',
-   * region: 'us-east-1',
-   * credentials: {
-   * AccessKeyId: 'AKIDEXAMPLE',
-   * SecretKet: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY',
-   * },
-   * });
-   * ```
-   */
-  sign(options: {
-    method: string;
-    path: string;
-    service: any;
-    headers: any;
-    body: any;
-    region: any;
-    credentials: any;
-  }) {
-    this.sanityCheckOptionsHeaders(options);
-    this.method = options.method.toUpperCase();
-    this.pathName = options.path.split('?')[0];
-    this.queryString = this.reconstructQueryString(options.path.split('?')[1]);
-    this.service = options.service;
-    this.headers = options.headers;
-    this.body = options.body;
-    this.region = options.region;
-    this.credentials = options.credentials;
+const hash = function(src: string) {
+  const arg = src || '';
+  const hash = new jsSha256();
+  hash.update(arg);
+  return toHex(hash.digestSync());
+};
+
+const escape_RFC3986 = function(component: string) {
+  return component.replace(/[!'()*]/g, function(c) {
+    return (
+      '%' +
+      c
+        .charCodeAt(0)
+        .toString(16)
+        .toUpperCase()
+    );
+  });
+};
+
+const canonical_query = function(query: string | null) {
+  if (!query || query.length === 0) {
+    return '';
   }
 
-  /**
-   * @method getCanonicalHeaders
-   * @returns {string} canonical headers
-   */
-  getCanonicalString(): string {
-    let parts = [];
-    // pathname = this.pathName;
-    parts.push(this.method);
-    parts.push(this.pathName);
-    parts.push(this.queryString); // query string
-    parts.push(this.getCanonicalHeaders() + '\n');
-    parts.push(this.getSignedHeaders());
-    parts.push(this.hexEncodedBodyHash());
-    return parts.join('\n');
-  }
+  return query
+    .split('&')
+    .map(e => {
+      const key_val = e.split('=');
 
-  /**
-   * @method getStringToSign
-   * @returns {string} string to sign for AWS request
-   */
-  getStringToSign(): string {
-    let parts = [];
-    parts.push(ALGORITHM);
-    parts.push(this.datetime);
-    parts.push(this.getCredentialString());
-    parts.push(Util.getHexEncodedHash(this.getCanonicalString()));
-
-    return parts.join('\n');
-  }
-
-  /**
-   * @method getSigngetSignatureedHeaders
-   * @returns {string} hex encoded body hash
-   */
-  getSignature(): string {
-    let kDate = Util.hmac(`AWS4${this.credentials.SecretKey}`, this.getDate()),
-      kRegion = Util.hmac(kDate, this.region),
-      kService = Util.hmac(kRegion, this.service),
-      kCredentials = Util.hmac(kService, 'aws4_request');
-
-    return Util.hmac(kCredentials, this.getStringToSign(), 'hex');
-  }
-
-  /**
-   * Function to get the Authorization header for the request.
-   * @method getAuthorization
-   * @returns {{Authorization: string}} Authorization header
-   * @example
-   * ```TypeScript
-   * let authHeader = awsSign.getAuthorization();
-   * // authHeader returns { Authorization: "" }
-   * ```
-   */
-  getAuthorization(): { Authorization: string } {
-    let header = `${ALGORITHM} Credential=${
-      this.credentials.AccessKeyId
-    }/${this.getCredentialString()}, SignedHeaders=${this.getSignedHeaders()}, Signature=${this.getSignature()}`;
-
-    return { Authorization: header };
-  }
-
-  sanityCheckRequiredKeysFor(object: {}, keys: any[]): void {
-    let missingKeys: any[] = [];
-    if (typeof object !== 'object')
-      throw 'first argument has to be a javascript object';
-    if (Object.keys(object).length === 0)
-      throw 'first argument cannot be an empty object';
-    if (!Array.isArray(keys)) throw 'second argument has to be an array';
-    if (keys.length == 0) throw 'second argument cannot be empty';
-
-    let objKeys = Object.keys(object).map(key => {
-      return key.toLowerCase();
-    });
-    keys.forEach(key => {
-      if (objKeys.indexOf(key.toLowerCase()) === -1) missingKeys.push(key);
-    });
-
-    if (missingKeys.length > 0) {
-      throw `Missing the following keys in options: ${missingKeys.join(' ')}`;
-    }
-  }
-
-  sanityCheckOptionsHeaders(options: {
-    credentials: any;
-    headers: { [x: string]: any; date: undefined };
-  }): void {
-    this.sanityCheckRequiredKeysFor(options, REQUIRED_OPTIONS_KEYS);
-    this.sanityCheckRequiredKeysFor(options.credentials, [
-      'SecretKey',
-      'AccessKeyId',
-    ]);
-    this.sanityCheckRequiredKeysFor(options.headers, REQUIRED_HEADERS);
-    if (options.headers[AMAZON_HEADERS.date] === undefined) {
-      if (options.headers.date === undefined) {
-        throw `need either ${AMAZON_HEADERS.date} or date header`;
+      if (key_val.length === 1) {
+        return e;
       } else {
-        this.datetime = Util.formatDateTime(options.headers.date);
+        const reencoded_val = escape_RFC3986(key_val[1]);
+        return key_val[0] + '=' + reencoded_val;
       }
-    } else {
-      this.datetime = Util.formatDateTime(options.headers[AMAZON_HEADERS.date]);
-    }
+    })
+    .sort((a, b) => {
+      const key_a = a.split('=')[0];
+      const key_b = b.split('=')[0];
+      if (key_a === key_b) {
+        return a < b ? -1 : 1;
+      } else {
+        return key_a < key_b ? -1 : 1;
+      }
+    })
+    .join('&');
+};
+
+const canonical_headers = function(headers: { [x: string]: string }) {
+  if (!headers || Object.keys(headers).length === 0) {
+    return '';
   }
 
-  reconstructQueryString(queryString: string | undefined): string {
-    if (queryString === undefined) return '';
-    let arr = queryString.split('&'); // split query to array
-    let arr2 = arr.sort((a: string, b: string) => {
-      // sort by key
-      if (a.split('=')[0] > b.split('=')[0]) {
-        return 1;
-      } else if (a.split('=')[0] < b.split('=')[0]) {
-        return -1;
-      } else if (a.split('=')[1] > b.split('=')[1]) {
-        return 1;
-      } else if (a.split('=')[1] < b.split('=')[1]) {
-        return -1;
-      } else {
-        return 0;
-      }
-    });
-
-    return arr2
-      .map((query: string) => {
-        let name = query.split('=')[0],
-          value = query.split('=')[1] || '';
-        return Util.uriEscape(name) + '=' + Util.uriEscape(value);
+  return (
+    Object.keys(headers)
+      .map(function(key) {
+        return {
+          key: key.toLowerCase(),
+          value: headers[key] ? headers[key].trim().replace(/\s+/g, ' ') : '',
+        };
       })
-      .join('&');
+      .sort(function(a, b) {
+        return a.key < b.key ? -1 : 1;
+      })
+      .map(function(item) {
+        return item.key + ':' + item.value;
+      })
+      .join('\n') + '\n'
+  );
+};
+
+const signed_headers = function(headers: {}) {
+  return Object.keys(headers)
+    .map(function(key) {
+      return key.toLowerCase();
+    })
+    .sort()
+    .join(';');
+};
+
+/**
+ *
+ * @param request - request object
+ * @param request.method - HTTP method
+ * @param request.url - URL
+ * @param request.headers - HTTP headers
+ * @param request.data - HTTP body
+ * @returns
+ */
+const canonical_request = function(request: {
+  method: any;
+  url: any;
+  headers: any;
+  data: any;
+}) {
+  const url_info: any = parse(request.url);
+
+  return [
+    request.method || '/',
+    encodeURIComponent(url_info.pathname).replace(/%2F/gi, '/'),
+    canonical_query(url_info.query),
+    canonical_headers(request.headers),
+    signed_headers(request.headers),
+    hash(request.data),
+  ].join('\n');
+};
+
+const parse_service_info = function(request: {
+  url: any;
+  service?: any;
+  region?: any;
+}) {
+  const url_info = parse(request.url),
+    host = url_info.host || '';
+
+  const matched = host.match(/([^\.]+)\.(?:([^\.]*)\.)?amazonaws\.com$/);
+  let parsed = (matched || []).slice(1, 3);
+
+  if (parsed[1] === 'es') {
+    // Elastic Search
+    parsed = parsed.reverse();
   }
 
-  getCredentialString(): string {
-    let parts = [];
-    parts.push(this.getDate());
-    parts.push(this.region);
-    parts.push(this.service);
-    parts.push('aws4_request');
-    return parts.join('/');
-  }
+  return {
+    service: request.service || parsed[0],
+    region: request.region || parsed[1],
+  };
+};
 
-  getCanonicalHeaders(): string {
-    let headers = [];
-    for (let key in this.headers) {
-      headers.push([key, this.headers[key]]);
+const credential_scope = function(d_str: string, region: any, service: any) {
+  return [d_str, region, service, 'aws4_request'].join('/');
+};
+
+const string_to_sign = function(
+  algorithm: string,
+  canonical_request: string,
+  dt_str: string,
+  scope: string
+) {
+  return [algorithm, dt_str, scope, hash(canonical_request)].join('\n');
+};
+
+const get_signing_key = function(
+  secret_key: string,
+  d_str: SourceData,
+  service_info: { service: any; region: any }
+) {
+  const k = 'AWS4' + secret_key,
+    k_date = encrypt(k, d_str),
+    k_region = encrypt(k_date, service_info.region),
+    k_service = encrypt(k_region, service_info.service),
+    k_signing = encrypt(k_service, 'aws4_request');
+
+  return k_signing;
+};
+
+const get_signature = function(
+  signing_key: SourceData | undefined,
+  str_to_sign: SourceData
+) {
+  return toHex(encrypt(signing_key, str_to_sign));
+};
+
+const get_authorization_header = function(
+  algorithm: string,
+  access_key: string,
+  scope: string,
+  signed_headers: string,
+  signature: string
+) {
+  return [
+    algorithm + ' ' + 'Credential=' + access_key + '/' + scope,
+    'SignedHeaders=' + signed_headers,
+    'Signature=' + signature,
+  ].join(', ');
+};
+
+/**
+ * Sign a HTTP request, add 'Authorization' header to request param
+ */
+export class Signer {
+  /**
+   * Sign a HTTP request, add 'Authorization' header to request param
+   * @method sign
+   * @memberof Signer
+   * @static
+   *
+   * @param {object} request - HTTP request object
+   * request: {
+   *   method: GET | POST | PUT ...,
+   *   url: ...,
+   *   headers: { header1: ... },
+   *   data: data
+   * }
+   *
+   * @param {object} access_info - AWS access credential info
+   * access_info: {
+   *   access_key: ...,
+   *   secret_key: ...,
+   *   session_token: ...
+   * }
+   *
+   * @param {object} [service_info] - AWS service type and region, optional,
+   * if not provided then parse out from url
+   * service_info: {
+   *   service: ...,
+   *   region: ...
+   * }
+   *
+   * @returns {object} Signed HTTP request
+   */
+  static sign(
+    request: {
+      headers?: any;
+      body?: any;
+      data?: any;
+      url: any;
+      method?: any;
+      service?: any;
+      region?: any;
+    },
+    access_info: { session_token: any; secret_key: string; access_key: string },
+    service_info?: {
+      region: string;
+      service: string;
     }
-    headers.sort(function(a, b) {
-      return a[0].toLowerCase() < b[0].toLowerCase() ? -1 : 1;
+  ) {
+    const headers = request.headers || {};
+    const { url, method, body } = request;
+
+    if (body && !request.data) {
+      throw new Error(
+        'The attribute "body" was found on the request object. Please use the attribute "data" instead.'
+      );
+    }
+
+    // datetime string and date string
+    const dt = DateUtils.getDateWithClockOffset();
+    const dt_str = dt.toISOString().replace(/[:\-]|\.\d{3}/g, '');
+    const d_str = dt_str.substr(0, 8);
+
+    const url_info = parse(url);
+    headers['host'] = url_info.host;
+    headers['x-amz-date'] = dt_str;
+    if (access_info.session_token) {
+      headers['X-Amz-Security-Token'] = access_info.session_token;
+    }
+
+    // Task 1: Create a Canonical Request
+    const request_str = canonical_request({ method, url, headers, data: body });
+
+    // Task 2: Create a String to Sign
+    const serviceInfo = service_info || parse_service_info({ url });
+    const scope = credential_scope(
+      d_str,
+      serviceInfo.region,
+      serviceInfo.service
+    );
+    const str_to_sign = string_to_sign(
+      DEFAULT_ALGORITHM,
+      request_str,
+      dt_str,
+      scope
+    );
+
+    // Task 3: Calculate the Signature
+    const signing_key = get_signing_key(
+      access_info.secret_key,
+      d_str,
+      serviceInfo
+    );
+    const signature = get_signature(signing_key, str_to_sign);
+
+    // Task 4: Adding the Signing information to the Request
+    const authorization_header = get_authorization_header(
+      DEFAULT_ALGORITHM,
+      access_info.access_key,
+      scope,
+      signed_headers(headers),
+      signature
+    );
+    headers['Authorization'] = authorization_header;
+
+    return { ...request, headers };
+  }
+
+  static signUrl(
+    urlToSign: string,
+    accessInfo: any,
+    serviceInfo?: any,
+    expiration?: number
+  ): string;
+  static signUrl(
+    request: any,
+    accessInfo: any,
+    serviceInfo?: any,
+    expiration?: number
+  ): string;
+  static signUrl(
+    urlOrRequest: string | any,
+    accessInfo: any,
+    serviceInfo?: any,
+    expiration?: number
+  ): string {
+    const {
+      url,
+      method = 'GET',
+      body,
+    }: {
+      url: any;
+      method: string;
+      body: any;
+    } = typeof urlOrRequest === 'object' ? urlOrRequest : { url: urlOrRequest };
+
+    const now = DateUtils.getDateWithClockOffset()
+      .toISOString()
+      .replace(/[:\-]|\.\d{3}/g, '');
+    const today = now.substr(0, 8);
+
+    const { search, ...parsedUrl } = parse(url, true, true);
+    const { host } = parsedUrl;
+    const signedHeaders = { host };
+
+    const { region, service } =
+      serviceInfo || parse_service_info({ url: format(parsedUrl) });
+    const credentialScope = credential_scope(today, region, service);
+
+    const sessionTokenRequired =
+      accessInfo.session_token && service !== IOT_SERVICE_NAME;
+    const queryParams = {
+      'X-Amz-Algorithm': DEFAULT_ALGORITHM,
+      'X-Amz-Credential': [accessInfo.access_key, credentialScope].join('/'),
+      'X-Amz-Date': now.substr(0, 16),
+      ...(sessionTokenRequired
+        ? { 'X-Amz-Security-Token': accessInfo.session_token }
+        : {}),
+      ...(expiration ? { 'X-Amz-Expires': `${expiration}` } : {}),
+      'X-Amz-SignedHeaders': Object.keys(signedHeaders).join(','),
+    };
+
+    const canonicalRequest = canonical_request({
+      method,
+      url: format({
+        ...parsedUrl,
+        query: { ...parsedUrl.query, ...queryParams },
+      }),
+      headers: signedHeaders,
+      data: body,
     });
-    let parts: string[] = [];
-    headers.forEach(item => {
-      let key = item[0].toLowerCase();
-      if (this.isSignableHeader(key)) {
-        parts.push(
-          key + ':' + this.getCanonicalHeaderValues(item[1].toString())
-        );
-      }
-    }, this);
-    return parts.join('\n');
-  }
 
-  getCanonicalHeaderValues(values: string): string {
-    return values.replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
-  }
+    const stringToSign = string_to_sign(
+      DEFAULT_ALGORITHM,
+      canonicalRequest,
+      now,
+      credentialScope
+    );
 
-  isSignableHeader(key: string): boolean {
-    if (key.toLowerCase().indexOf('x-amz-') === 0) return true;
-    return UNSIGNABLE_HEADERS.indexOf(key) < 0;
-  }
+    const signing_key = get_signing_key(accessInfo.secret_key, today, {
+      region,
+      service,
+    });
+    const signature = get_signature(signing_key, stringToSign);
 
-  getSignedHeaders(): string {
-    let keys = [];
-    for (let key in this.headers) {
-      key = key.toLowerCase();
-      if (this.isSignableHeader(key)) keys.push(key);
-    }
-    return keys.sort().join(';');
-  }
+    const additionalQueryParams = {
+      'X-Amz-Signature': signature,
+      ...(accessInfo.session_token && {
+        'X-Amz-Security-Token': accessInfo.session_token,
+      }),
+    };
 
-  hexEncodedBodyHash(): any {
-    if (this.service === 's3') {
-      return 'UNSIGNED-PAYLOAD';
-    } else if (this.headers['X-Amz-Content-Sha256']) {
-      return this.headers['X-Amz-Content-Sha256'];
-    } else {
-      return Util.getHexEncodedHash(this.body || '');
-    }
-  }
+    const result = format({
+      protocol: parsedUrl.protocol,
+      slashes: true,
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port,
+      pathname: parsedUrl.pathname,
+      query: { ...parsedUrl.query, ...queryParams, ...additionalQueryParams },
+    });
 
-  getDate(): any {
-    return (this.datetime as any).slice(0, 8);
-  }
-
-  /**
-   * @method getAmzDate
-   * @param date
-   * @returns
-   * the date in the amz date format e.g 20230209T123600Z
-   * @example
-   * ```TypeScript
-   * let amzDate = awsSign.getAmzDate(new Date());
-   * // amzDate returns 20230209T123600Z
-   * ```
-   */
-  getAmzDate(date: Date): any {
-    return date.toISOString().replace(/[:\-]|\.\d{3}/g, '');
-  }
-
-  /**
-   * @method retrieveAuthorizationHeader
-   * @param authorization - the signed authorization header
-   * @param signature - the signature
-   * @returns
-   * the authorization header with the signature
-   * @example
-   * ```TypeScript
-   * let authorization = awsSign.getAuthorizationHeader();
-   * let signature = awsSign.getSignature();
-   * let authHeader = awsSign.retrieveAuthorizationHeader(authorization, signature);
-   * // authHeader returns Authorization Header with the signature
-   * ```
-   */
-  retrieveAuthorizationHeader(authorization: string, signature: string): any {
-    return `${authorization}SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`;
+    return result;
   }
 }

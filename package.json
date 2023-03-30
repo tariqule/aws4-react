@@ -69,6 +69,8 @@
     "typescript": "^5.0.2"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "^4.0.0",
+    "@aws-sdk/util-hex-encoding": "^3.295.0",
     "@types/crypto-js": "^4.1.1",
     "crypto-js": "^4.1.1",
     "moment": "^2.29.4"
